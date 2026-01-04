@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 
-from .util.ct_normalization import ct_normalize_simple, ct_normalize_nnunet
+from .util.ct_normalization import ct_normalize_simple, ct_normalize_nnunet, ct_normalize_for_diffusion
 from .util.nifti_3d_mask import bbox3d_to_mask, sphere3d_to_mask
 
 NIFTI_EXTENSIONS = ['.nii.gz', '.nii', '.NII.GZ', '.NII']
@@ -258,6 +258,14 @@ class Inpaint3DDataset(data.Dataset):
         # Normalize CT image
         if self.normalization == 'nnunet':
             image_normalized = ct_normalize_nnunet(
+                image_data, 
+                foreground_percentiles=self.foreground_percentiles,
+                global_mean=self.global_mean,
+                global_std=self.global_std,
+                use_nonzero_only=True
+            )
+        elif self.normalization == 'nn_diffusion':
+            image_normalized = ct_normalize_for_diffusion(
                 image_data, 
                 foreground_percentiles=self.foreground_percentiles,
                 global_mean=self.global_mean,

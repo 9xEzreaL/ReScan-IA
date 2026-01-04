@@ -102,7 +102,7 @@ def ct_normalize_nnunet(image, foreground_percentiles=(0.5, 99.5), global_mean=N
     else:
         image_np = image.copy()
         is_torch = False
-    
+
     # Step 1: Identify foreground region (non-zero or non-background voxels)
     if use_nonzero_only:
         # Use non-zero voxels as foreground
@@ -123,7 +123,7 @@ def ct_normalize_nnunet(image, foreground_percentiles=(0.5, 99.5), global_mean=N
     else:
         # If no foreground, use default clipping
         image_np = np.clip(image_np, -1000, 1000)
-    
+
     # Step 3: Z-score normalization
     if use_nonzero_only and np.any(foreground_mask):
         # Update foreground mask after clipping
@@ -144,6 +144,7 @@ def ct_normalize_nnunet(image, foreground_percentiles=(0.5, 99.5), global_mean=N
                 image_np = (image_np - mean) / std
             else:
                 image_np = image_np - mean
+                
     else:
         # Use all voxels for statistics
         if global_mean is not None and global_std is not None:
@@ -157,10 +158,30 @@ def ct_normalize_nnunet(image, foreground_percentiles=(0.5, 99.5), global_mean=N
             image_np = (image_np - mean) / std
         else:
             image_np = image_np - mean
-    
     # Convert back to torch if input was torch
     if is_torch:
         return torch.from_numpy(image_np).to(image.device if hasattr(image, 'device') else 'cpu')
     
     return image_np
 
+def ct_normalize_for_diffusion(image, foreground_percentiles=(0.5, 99.5), global_mean=None, global_std=None, use_nonzero_only=True, clip_z=2.5):
+
+    # Step 1: nnUNet-style normalization (your original function)
+    image = ct_normalize_nnunet(
+        image,
+        foreground_percentiles=foreground_percentiles,
+        global_mean=global_mean,
+        global_std=global_std,
+        use_nonzero_only=use_nonzero_only
+    )
+
+    # Step 2: squash to [-1, 1] (diffusion-friendly)
+    if isinstance(image, torch.Tensor):
+        image = torch.clamp(image, -clip_z, clip_z)
+        image = image / clip_z
+    else:
+        image = np.clip(image, -clip_z, clip_z)
+        image = image / clip_z
+
+    return image
+    
