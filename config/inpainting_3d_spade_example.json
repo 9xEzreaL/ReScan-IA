@@ -1,0 +1,143 @@
+{
+  "name": "inpainting_3d_spade",
+  "finetune_norm": false,
+  "model": {
+    "which_model": {
+      "name": ["models.model", "Palette"],
+      "args": {
+        "sample_num": 8,
+        "task": "inpainting",
+        "optimizers": [
+          { "lr": 5e-5, "weight_decay": 0}
+        ]
+      }
+    },
+    "which_networks": [
+      {
+        "name": ["models.network", "Network"],
+        "args": {
+          "unet": {
+            "image_size": 128,
+            "in_channel": 2,
+            "inner_channel": 32,
+            "out_channel": 1,
+            "res_blocks": 2,
+            "attn_res": [16],
+            "channel_mults": [1, 2, 4, 8],
+            "dropout": 0,
+            "use_checkpoint": false,
+            "use_fp16": false,
+            "num_heads": 1,
+            "num_head_channels": -1,
+            "use_scale_shift_norm": true,
+            "resblock_updown": true,
+            "use_new_attention_order": false,
+            "spade_seg_channel": 1
+          },
+          "beta_schedule": {
+            "train": {
+              "schedule": "linear",
+              "n_timestep": 1000,
+              "linear_start": 1e-6,
+              "linear_end": 1e-2
+            },
+            "val": {
+              "schedule": "linear",
+              "n_timestep": 1000,
+              "linear_start": 1e-6,
+              "linear_end": 1e-2
+            }
+          },
+          "module_name": "spade_diffusion_3d"
+        }
+      }
+    ],
+    "which_losses": [
+      {
+        "name": ["models.loss", "mse_loss"]
+      }
+    ],
+    "which_metrics": [
+      {
+        "name": ["models.metric", "mae"]
+      }
+    ]
+  },
+  "datasets": {
+    "train": {
+      "which_dataset": {
+        "name": ["data.dataset_spade_3d", "Inpaint3DSPADEDataset"],
+        "args": {
+          "data_root": "/path/to/your/image/data/",
+          "aneurysm_root": "/path/to/your/binary/mask/data/",
+          "mask_size_range": [10, 30],
+          "data_len": -1,
+          "normalization": "nnunet",
+          "foreground_percentiles": [0.5, 99.5],
+          "global_mean": null,
+          "global_std": null,
+          "hu_min": -1000,
+          "hu_max": 1000,
+          "image_size": [128, 128, 96]
+        }
+      },
+      "dataloader": {
+        "args": {
+          "batch_size": 1,
+          "shuffle": true,
+          "num_workers": 0,
+          "pin_memory": true,
+          "drop_last": false
+        },
+        "validation_split": 0.005
+      }
+    },
+    "val": {
+      "which_dataset": {
+        "name": ["data.dataset_spade_3d", "Inpaint3DSPADEDataset"],
+        "args": {
+          "data_root": "/path/to/your/image/data/",
+          "aneurysm_root": "/path/to/your/binary/mask/data/",
+          "mask_size_range": [10, 30],
+          "data_len": -1,
+          "normalization": "nnunet",
+          "foreground_percentiles": [0.5, 99.5],
+          "global_mean": null,
+          "global_std": null,
+          "hu_min": -1000,
+          "hu_max": 1000,
+          "image_size": [128, 128, 96]
+        }
+      },
+      "dataloader": {
+        "args": {
+          "batch_size": 1,
+          "shuffle": false,
+          "num_workers": 0,
+          "pin_memory": true,
+          "drop_last": false
+        }
+      }
+    }
+  },
+  "path": {
+    "base_dir": "experiments",
+    "code": "code",
+    "tb_logger": "tb_logger",
+    "results": "results",
+    "checkpoint": "checkpoint",
+    "resume_state": null
+  },
+  "train": {
+    "n_epoch": 51,
+    "n_iter": 1000000,
+    "batch_size": 1,
+    "log_iter": 100,
+    "val_epoch": 3,
+    "save_checkpoint_epoch": 3,
+    "tensorboard": true
+  },
+  "distributed": false,
+  "gpu_ids": [0],
+  "seed": 42
+}

@@ -76,6 +76,12 @@ class Palette(BaseModel):
             self.mask_image = mask_image
         else:
             self.mask_image = None
+        # Handle seg (segmentation map) - optional, for SPADE modules
+        seg = data.get('seg')
+        if seg is not None:
+            self.seg = self.set_device(seg)
+        else:
+            self.seg = None
         self.path = data['path']
         self.batch_size = len(data['path'])
     
@@ -156,7 +162,7 @@ class Palette(BaseModel):
         for train_data in tqdm.tqdm(self.phase_loader):
             self.set_input(train_data)
             self.optG.zero_grad()
-            loss = self.netG(self.gt_image, self.cond_image, mask=self.mask)
+            loss = self.netG(self.gt_image, self.cond_image, mask=self.mask, seg=self.seg)
             loss.backward()
             self.optG.step()
 
@@ -198,15 +204,15 @@ class Palette(BaseModel):
                 if self.opt['distributed']:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
                 else:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
 
                 self.iter += self.batch_size
                 self.writer.set_iter(self.epoch, self.iter, phase='val')
@@ -243,15 +249,15 @@ class Palette(BaseModel):
                 if self.opt['distributed']:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
                 else:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
                         
                 self.iter += self.batch_size
                 self.writer.set_iter(self.epoch, self.iter, phase='test')

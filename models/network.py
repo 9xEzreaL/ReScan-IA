@@ -17,11 +17,15 @@ class Network(BaseNetwork):
             from .guided_diffusion_modules.unet import UNet
         elif module_name == 'guided_diffusion_3d':
             from .guided_diffusion_modules_3d.unet import UNet
+        elif module_name == 'spade_diffusion_3d':
+            from .guided_spade_diffusion_modules_3d.unet import UNet
         
         self.denoise_fn = UNet(**unet)
         self.beta_schedule = beta_schedule
         # Detect if using 3D module based on module_name
         self.is_3d = module_name.endswith('_3d')
+        # Detect if using SPADE module
+        self.use_spade = 'spade' in module_name
 
     def set_loss(self, loss_fn):
         self.loss_fn = loss_fn
@@ -73,7 +77,7 @@ class Network(BaseNetwork):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, y_t.shape)
         return posterior_mean, posterior_log_variance_clipped
 
-    def p_mean_variance(self, y_t, t, clip_denoised: bool, y_cond=None):
+    def p_mean_variance(self, y_t, t, clip_denoised: bool, y_cond=None, seg=None):
         # Support both 2D and 3D: determine x_shape based on input tensor dimensions
         if self.is_3d:
             x_shape = (1, 1, 1, 1, 1)  # 3D: B, C, D, H, W
@@ -85,11 +89,17 @@ class Network(BaseNetwork):
         
         if 0:
             noise_level_flat = noise_level.view(noise_level.shape[0], -1)[:, 0]
-            y_0_hat = self.predict_start_from_noise(
-                    y_t, t=t, noise=self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level_flat))
+            if self.use_spade and seg is not None:
+                noise_hat = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level_flat, seg)
+            else:
+                noise_hat = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level_flat)
+            y_0_hat = self.predict_start_from_noise(y_t, t=t, noise=noise_hat)
         if 1:
-            y_0_hat = self.predict_start_from_noise(
-                    y_t, t=t, noise=self.denoise_fn(torch.cat([y_cond, y_t], dim=1), t))
+            if self.use_spade and seg is not None:
+                noise_hat = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), t, seg)
+            else:
+                noise_hat = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), t)
+            y_0_hat = self.predict_start_from_noise(y_t, t=t, noise=noise_hat)
 
         if clip_denoised:
             y_0_hat.clamp_(-1., 1.)
@@ -106,14 +116,14 @@ class Network(BaseNetwork):
         )
 
     @torch.no_grad()
-    def p_sample(self, y_t, t, clip_denoised=True, y_cond=None):
+    def p_sample(self, y_t, t, clip_denoised=True, y_cond=None, seg=None):
         model_mean, model_log_variance = self.p_mean_variance(
-            y_t=y_t, t=t, clip_denoised=clip_denoised, y_cond=y_cond)
+            y_t=y_t, t=t, clip_denoised=clip_denoised, y_cond=y_cond, seg=seg)
         noise = torch.randn_like(y_t) if any(t>0) else torch.zeros_like(y_t)
         return model_mean + noise * (0.5 * model_log_variance).exp()
 
     @torch.no_grad()
-    def restoration(self, y_cond, y_t=None, y_0=None, mask=None, sample_num=8):
+    def restoration(self, y_cond, y_t=None, y_0=None, mask=None, seg=None, sample_num=8):
         b, *_ = y_cond.shape
 
         assert self.num_timesteps > sample_num, 'num_timesteps must greater than sample_num'
@@ -121,35 +131,36 @@ class Network(BaseNetwork):
         
         y_t = default(y_t, lambda: torch.randn_like(y_cond))
         ret_arr = y_t
+
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
             t = torch.full((b,), i, device=y_cond.device, dtype=torch.long)
             #if i == 500:
-            #  affine = np.eye(4)  # ³ÌÂ²³æªº affine¡]¤£§t¯u¹êªÅ¶¡¸ê°T¡^
+            #  affine = np.eye(4)  # ï¿½ï¿½Â²ï¿½æªº affineï¿½]ï¿½ï¿½ï¿½tï¿½uï¿½ï¿½Å¶ï¿½ï¿½ï¿½Tï¿½^
             #  nii = nib.Nifti1Image(y_cond[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
             #  nib.save(nii, "tmp/y_cond_500.nii.gz")
 
-            #  affine = np.eye(4)  # ³ÌÂ²³æªº affine¡]¤£§t¯u¹êªÅ¶¡¸ê°T¡^
+            #  affine = np.eye(4)  # ï¿½ï¿½Â²ï¿½æªº affineï¿½]ï¿½ï¿½ï¿½tï¿½uï¿½ï¿½Å¶ï¿½ï¿½ï¿½Tï¿½^
             #  nii = nib.Nifti1Image(y_t[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
             #  nib.save(nii, "tmp/y_t_500.nii.gz")
             #  print(y_cond.max(), y_cond.min())
             #  print(y_t.max(), y_t.min())
               
             #if i == 2:
-            #  affine = np.eye(4)  # ³ÌÂ²³æªº affine¡]¤£§t¯u¹êªÅ¶¡¸ê°T¡^
+            #  affine = np.eye(4)  # ï¿½ï¿½Â²ï¿½æªº affineï¿½]ï¿½ï¿½ï¿½tï¿½uï¿½ï¿½Å¶ï¿½ï¿½ï¿½Tï¿½^
             #  nii = nib.Nifti1Image(y_cond[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
             #  nib.save(nii, "tmp/y_cond_10.nii.gz")
 
-            #  affine = np.eye(4)  # ³ÌÂ²³æªº affine¡]¤£§t¯u¹êªÅ¶¡¸ê°T¡^
+            #  affine = np.eye(4)  # ï¿½ï¿½Â²ï¿½æªº affineï¿½]ï¿½ï¿½ï¿½tï¿½uï¿½ï¿½Å¶ï¿½ï¿½ï¿½Tï¿½^
             #  nii = nib.Nifti1Image(y_t[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
             #  nib.save(nii, "tmp/y_t_10.nii.gz")
             #  print(y_cond.max(), y_cond.min())
             #  print(y_t.max(), y_t.min())
-            y_t = self.p_sample(y_t, t, y_cond=y_cond)
-            # !!!!!!!!!³Ì­ì¥ý°µªk!!!!!!!!!!!
+            y_t = self.p_sample(y_t, t, y_cond=y_cond, seg=seg)
+            # !!!!!!!!!ï¿½Ì­ï¿½ï¿½ï¿½ï¿½ï¿½k!!!!!!!!!!!
             if 1:
                 if mask is not None:
                     y_t = y_0*(1.-mask) + mask*y_t
-            # ¹êÅç«á°O±o§ï¦^¨Ó
+            # ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½oï¿½ï¿½^ï¿½ï¿½
             if 0:
                 if mask is not None:
                     gamma_t = extract(self.gammas, t, y_0.shape).to(y_0.device)
@@ -161,7 +172,7 @@ class Network(BaseNetwork):
                 ret_arr = torch.cat([ret_arr, y_t], dim=0)
         return y_t, ret_arr
 
-    def forward(self, y_0, y_cond=None, mask=None, noise=None):
+    def forward(self, y_0, y_cond=None, mask=None, seg=None, noise=None):
         # sampling from p(gammas)
         b, *_ = y_0.shape
         # Support both 2D and 3D: determine x_shape based on input tensor dimensions
@@ -191,7 +202,7 @@ class Network(BaseNetwork):
             sample_gammas_expanded = sample_gammas_flat.view(b, 1, 1, 1)
         y_noisy = self.q_sample(
             y_0=y_0, sample_gammas=sample_gammas_expanded, noise=noise)
-        
+
 
         if mask is not None:
             # For inpainting: mask should have same spatial dimensions as y_0
@@ -199,18 +210,33 @@ class Network(BaseNetwork):
             # 3D: mask shape should be (B, 1, D, H, W) or (B, C, D, H, W)
             # Use flattened sample_gammas for denoise_fn (it expects 1D)
             if 0:
-                noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), sample_gammas_flat.squeeze(-1))
+                if self.use_spade and seg is not None:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), sample_gammas_flat.squeeze(-1), seg)
+                else:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), sample_gammas_flat.squeeze(-1))
             if 1:
-                noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), t)
+                if self.use_spade and seg is not None:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), t, seg)
+                else:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), t)
                 loss = self.loss_fn(mask*noise, mask*noise_hat)
             if 0:
-                noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t)
+                if self.use_spade and seg is not None:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t, seg)
+                else:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t)
                 loss = self.loss_fn(noise, noise_hat)
         else:
             if 0:
-                noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), sample_gammas_flat.squeeze(-1))
+                if self.use_spade and seg is not None:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), sample_gammas_flat.squeeze(-1), seg)
+                else:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), sample_gammas_flat.squeeze(-1))
             if 1:
-                noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t)
+                if self.use_spade and seg is not None:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t, seg)
+                else:
+                    noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t)
             loss = self.loss_fn(noise, noise_hat)
         return loss
 
