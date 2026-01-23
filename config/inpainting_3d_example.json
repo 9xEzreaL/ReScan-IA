@@ -19,7 +19,7 @@
           "unet": {
             "image_size": 128,
             "in_channel": 2,
-            "inner_channel": 64,
+            "inner_channel": 32,
             "out_channel": 1,
             "res_blocks": 2,
             "attn_res": [16],
@@ -67,8 +67,8 @@
       "which_dataset": {
         "name": ["data.dataset_3d", "Inpaint3DDataset"],
         "args": {
-          "data_root": "D:\\rsna-intracranial-aneurysm-detection\\series_resampled\\train",
-          "csv_path": "D:\\rsna-intracranial-aneurysm-detection\\series_resampled\\converted_coords_all.csv",
+          "data_root": "/data/cephfs-1/scratch/groups/frey/users/chtz10_c/data/series_resampled/train/",
+          "csv_path": "/data/cephfs-1/scratch/groups/frey/users/chtz10_c/data/series_resampled/converted_coords_all.csv",
           "mask_size_range": [10, 30],
           "data_len": -1,
           "normalization": "nnunet",
@@ -88,15 +88,15 @@
           "pin_memory": true,
           "drop_last": false
         },
-        "validation_split": 0.1
+        "validation_split": 0.005
       }
     },
     "val": {
       "which_dataset": {
         "name": ["data.dataset_3d", "Inpaint3DDataset"],
         "args": {
-          "data_root": "D:\\rsna-intracranial-aneurysm-detection\\series_resampled\\eval",
-          "csv_path": "D:\\rsna-intracranial-aneurysm-detection\\series_resampled\\converted_coords_all.csv",
+          "data_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/serire_resampled_sub/eval",
+          "csv_path": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/serire_resampled_sub/converted_coords_all.csv",
           "mask_size_range": [10, 30],
           "data_len": -1,
           "normalization": "nnunet",
@@ -124,15 +124,15 @@
     "tb_logger": "tb_logger",
     "results": "results",
     "checkpoint": "checkpoint",
-    "resume_state": null
+    "resume_state": "/data/cephfs-1/work/groups/frey/users/chtz10_c/aneurysm_inpainting/experiments/train_inpainting_3d_260101_132917/checkpoint/12" 
   },
   "train": {
-    "n_epoch": 100,
+    "n_epoch": 51,
     "n_iter": 1000000,
     "batch_size": 1,
     "log_iter": 100,
-    "val_epoch": 5,
-    "save_checkpoint_epoch": 10,
+    "val_epoch": 3,
+    "save_checkpoint_epoch": 3,
     "tensorboard": true
   },
   "distributed": false,

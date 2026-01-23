@@ -129,7 +129,7 @@ class VisualWriter():
                         n_samples, h, w, d = volumes.shape
                         volumes_np = volumes.detach().cpu().numpy()
                         
-                        volume_np = np.concatenate([volumes_np[i] for i in range(volumes_np.shape[0])], 0)
+                        volume_np = np.concatenate([volumes_np[i] for i in range(volumes_np.shape[0])], 2)
                         volume_np = volume_np.transpose(2, 1, 0)  # (Z, Y, X) -> (X, Y, Z)
                         
                         # Create NIfTI image
