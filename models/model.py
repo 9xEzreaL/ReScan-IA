@@ -82,6 +82,12 @@ class Palette(BaseModel):
             self.seg = self.set_device(seg)
         else:
             self.seg = None
+        # Handle vessel_seg (vessel segmentation map) - optional
+        vessel_seg = data.get('vessel_seg')
+        if vessel_seg is not None:
+            self.vessel_seg = self.set_device(vessel_seg)
+        else:
+            self.vessel_seg = None
         self.path = data['path']
         self.batch_size = len(data['path'])
     
@@ -162,7 +168,7 @@ class Palette(BaseModel):
         for train_data in tqdm.tqdm(self.phase_loader):
             self.set_input(train_data)
             self.optG.zero_grad()
-            loss = self.netG(self.gt_image, self.cond_image, mask=self.mask, seg=self.seg)
+            loss = self.netG(self.gt_image, self.cond_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg)
             loss.backward()
             self.optG.step()
 
@@ -204,15 +210,15 @@ class Palette(BaseModel):
                 if self.opt['distributed']:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                 else:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
 
                 self.iter += self.batch_size
                 self.writer.set_iter(self.epoch, self.iter, phase='val')
@@ -249,15 +255,15 @@ class Palette(BaseModel):
                 if self.opt['distributed']:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                 else:
                     if self.task in ['inpainting','uncropping']:
                         self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, sample_num=self.sample_num)
+                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, sample_num=self.sample_num)
+                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                         
                 self.iter += self.batch_size
                 self.writer.set_iter(self.epoch, self.iter, phase='test')
