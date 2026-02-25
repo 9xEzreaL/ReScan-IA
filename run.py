@@ -57,7 +57,7 @@ def main_worker(gpu, ngpus_per_node, opt):
         if opt['phase'] == 'train':
             model.train()
         else:
-            model.test()
+            model.test(iters=25)
     finally:
         phase_writer.close()
         

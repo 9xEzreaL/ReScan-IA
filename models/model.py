@@ -4,6 +4,13 @@ import numpy as np
 from core.base_model import BaseModel
 from core.logger import LogTracker
 import copy
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=".*ChainedAssignmentError.*"
+)
+
 class EMA():
     def __init__(self, beta=0.9999):
         super().__init__()
@@ -131,6 +138,10 @@ class Palette(BaseModel):
                 dict.update({
                     'output': (self.output.detach()[:].float().cpu()+1)/2
                 })
+        if hasattr(self, 'seg') and self.seg is not None:
+            dict['seg'] = self.seg.detach().float().cpu()
+        if hasattr(self, 'vessel_seg') and self.vessel_seg is not None:
+            dict['vessel_seg'] = self.vessel_seg.detach().float().cpu()
         return dict
 
     def save_current_results(self):
@@ -158,7 +169,12 @@ class Palette(BaseModel):
                     for idx in range(self.batch_size):
                         ret_result.append(self.mask_image[idx].detach().float().cpu() if isinstance(self.mask_image, torch.Tensor) else self.mask_image[idx])
                 ret_path.extend(['Mask_{}'.format(name) for name in self.path])
-
+        if hasattr(self, 'seg') and self.seg is not None:
+            ret_path.append(f'Seg_{self.path[idx]}')
+            ret_result.append(self.seg[idx].detach().float().cpu())
+        if hasattr(self, 'vessel_seg') and self.vessel_seg is not None:
+            ret_path.append(f'VesselSeg_{self.path[idx]}')
+            ret_result.append(self.vessel_seg[idx].detach().float().cpu())
         self.results_dict = self.results_dict._replace(name=ret_path, result=ret_result)
         return self.results_dict._asdict()
 
@@ -209,13 +225,13 @@ class Palette(BaseModel):
                 self.set_input(val_data)
                 if self.opt['distributed']:
                     if self.task in ['inpainting','uncropping']:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
+                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, #y_t=self.cond_image, 
                             y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
                         self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                 else:
                     if self.task in ['inpainting','uncropping']:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
+                        self.output, self.visuals = self.netG.restoration(self.cond_image, #y_t=self.cond_image, 
                             y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
                         self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
@@ -246,55 +262,56 @@ class Palette(BaseModel):
 
         return self.val_metrics.result()
 
-    def test(self):
+    def test(self, iters=1):
         self.netG.eval()
         self.test_metrics.reset()
         with torch.no_grad():
-            for phase_data in tqdm.tqdm(self.phase_loader):
-                self.set_input(phase_data)
-                if self.opt['distributed']:
-                    if self.task in ['inpainting','uncropping']:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
+            for it in range(iters): 
+                for phase_data in tqdm.tqdm(self.phase_loader):
+                    self.set_input(phase_data)
+                    if self.opt['distributed']:
+                        if self.task in ['inpainting','uncropping']:
+                            self.output, self.visuals = self.netG.module.restoration(self.cond_image, #y_t=self.cond_image, 
+                                y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
+                        else:
+                            self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
                     else:
-                        self.output, self.visuals = self.netG.module.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
-                else:
-                    if self.task in ['inpainting','uncropping']:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, y_t=self.cond_image, 
-                            y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
-                    else:
-                        self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
-                        
-                self.iter += self.batch_size
-                self.writer.set_iter(self.epoch, self.iter, phase='test')
-                for met in self.metrics:
-                    key = met.__name__
-                    value = met(self.gt_image, self.output)
-                    self.test_metrics.update(key, value)
-                    self.writer.add_scalar(key, value)
-                for key, value in self.get_current_visuals(phase='test').items():
-                    if value is not None:
-                        if self.is_3d:
-                            # For 3D volumes, extract middle slice for visualization
-                            if value.dim() == 5:
-                                d_mid = value.shape[2] // 2
-                                value_2d = value[:, :, d_mid, :, :]  # (B, C, H, W)
-                                if value_2d.shape[1] == 1:
-                                    value_2d = value_2d.squeeze(1).unsqueeze(1).repeat(1, 3, 1, 1)  # (B, 3, H, W)
-                                self.writer.add_images(key, value_2d)
+                        if self.task in ['inpainting','uncropping']:
+                            self.output, self.visuals = self.netG.restoration(self.cond_image, #y_t=self.cond_image, 
+                                y_0=self.gt_image, mask=self.mask, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
+                        else:
+                            self.output, self.visuals = self.netG.restoration(self.cond_image, seg=self.seg, vessel_seg=self.vessel_seg, sample_num=self.sample_num)
+                            
+                    self.iter += self.batch_size
+                    self.writer.set_iter(it, self.iter, phase='test')
+                    for met in self.metrics:
+                        key = met.__name__
+                        value = met(self.gt_image, self.output)
+                        self.test_metrics.update(key, value)
+                        self.writer.add_scalar(key, value)
+                    for key, value in self.get_current_visuals(phase='test').items():
+                        if value is not None:
+                            if self.is_3d:
+                                # For 3D volumes, extract middle slice for visualization
+                                if value.dim() == 5:
+                                    d_mid = value.shape[2] // 2
+                                    value_2d = value[:, :, d_mid, :, :]  # (B, C, H, W)
+                                    if value_2d.shape[1] == 1:
+                                        value_2d = value_2d.squeeze(1).unsqueeze(1).repeat(1, 3, 1, 1)  # (B, 3, H, W)
+                                    self.writer.add_images(key, value_2d)
+                                else:
+                                    self.writer.add_images(key, value)
                             else:
                                 self.writer.add_images(key, value)
-                        else:
-                            self.writer.add_images(key, value)
-                self.writer.save_images(self.save_current_results())
+                    self.writer.save_images(self.save_current_results())
+          
+                test_log = self.test_metrics.result()
+                ''' save logged informations into log dict ''' 
+                test_log.update({'epoch': self.epoch, 'iters': self.iter})
         
-        test_log = self.test_metrics.result()
-        ''' save logged informations into log dict ''' 
-        test_log.update({'epoch': self.epoch, 'iters': self.iter})
-
-        ''' print logged informations to the screen and tensorboard ''' 
-        for key, value in test_log.items():
-            self.logger.info('{:5s}: {}\t'.format(str(key), value))
+                ''' print logged informations to the screen and tensorboard ''' 
+                for key, value in test_log.items():
+                    self.logger.info('{:5s}: {}\t'.format(str(key), value))
 
     def load_networks(self):
         """ save pretrained model and training state, which only do on GPU 0. """

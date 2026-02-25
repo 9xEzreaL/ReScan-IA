@@ -1,0 +1,180 @@
+{
+  "name": "inpainting_3d_spade",
+  "finetune_norm": false,
+  "model": {
+    "which_model": {
+      "name": ["models.model", "Palette"],
+      "args": {
+        "sample_num": 8,
+        "task": "inpainting",
+        "optimizers": [
+          { "lr": 5e-5, "weight_decay": 0}
+        ]
+      }
+    },
+    "which_networks": [
+      {
+        "name": ["models.network", "Network"],
+        "args": {
+          "unet": {
+            "image_size": 96,
+            "in_channel": 3,
+            "inner_channel": 32,
+            "out_channel": 1,
+            "res_blocks": 2,
+            "attn_res": [16],
+            "channel_mults": [1, 2, 4, 8],
+            "dropout": 0,
+            "use_checkpoint": false,
+            "use_fp16": false,
+            "num_heads": 1,
+            "num_head_channels": -1,
+            "use_scale_shift_norm": false,
+            "resblock_updown": true,
+            "use_new_attention_order": false,
+            "spade_seg_channel": 1
+          },
+          "beta_schedule": {
+            "train": {
+              "schedule": "linear",
+              "n_timestep": 1000,
+              "linear_start": 1e-6,
+              "linear_end": 1e-2
+            },
+            "val": {
+              "schedule": "linear",
+              "n_timestep": 1000,
+              "linear_start": 1e-6,
+              "linear_end": 1e-2
+            },
+            "test": {
+              "schedule": "linear",
+              "n_timestep": 1000,
+              "linear_start": 1e-6,
+              "linear_end": 1e-2
+            }
+          },
+          "module_name": "spade_diffusion_3d"
+        }
+      }
+    ],
+    "which_losses": [
+      {
+        "name": ["models.loss", "l1_loss"]
+      }
+    ],
+    "which_metrics": [
+      {
+        "name": ["models.metric", "mae"]
+      }
+    ]
+  },
+  "datasets": {
+    "train": {
+      "which_dataset": {
+        "name": ["data.dataset_spade_3d", "Inpaint3DSPADEDatasetRandomMaskWithVessel"],
+        "args": {
+          "data_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/train/image/",
+          "aneurysm_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/train/all_aneurysm_mask/",
+          "vessel_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/train/vessel_mask/",
+          "data_len": -1,
+          "normalization": "ct_normalize_simple",
+          "hu_min": -50,
+          "hu_max": 450,
+          "image_size": [96, 96, 96],
+          "mask_size_range": [10, 30]
+        }
+      },
+      "dataloader": {
+        "args": {
+          "batch_size": 1,
+          "shuffle": true,
+          "num_workers": 0,
+          "pin_memory": true,
+          "drop_last": false
+        },
+        "validation_split": 0.02
+      }
+    },
+    "val": {
+      "which_dataset": {
+        "name": ["data.dataset_spade_3d", "Inpaint3DSPADEDatasetRandomMaskWithVessel"],
+        "args": {
+          "data_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/test/image/",
+          "aneurysm_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/train/all_aneurysm_mask/",
+          "vessel_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/test/vessel_mask/",
+          "data_len": -1,
+          "normalization": "ct_normalize_simple",
+          "hu_min": -50,
+          "hu_max": 450,
+          "image_size": [96, 96, 96],
+          "mask_size_range": [15, 16]
+        }
+      },
+      "dataloader": {
+        "args": {
+          "batch_size": 1,
+          "shuffle": false,
+          "num_workers": 0,
+          "pin_memory": true,
+          "drop_last": false
+        }
+      }
+    },
+    "test": {
+      "which_dataset": {
+        "name": ["data.dataset_spade_3d", "TestInpaint3DSPADEDatasetRandomMaskWithVessel2"],
+        "args": {
+          // "data_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/test/ts_image_5/",
+          "data_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/test/ts_image_8/",
+          "aneurysm_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/train/all_aneurysm_mask/",
+          "vessel_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/eval/vessel_mask/",
+          "testset_aneurysm_root": "/data/cephfs-1/work/groups/frey/users/chtz10_c/data/for_diffusion_training/test/aneurysm_mask_large_2/",
+          "data_len": -1,
+          "normalization": "ct_normalize_simple",
+          "hu_min": -50,
+          "hu_max": 450,
+          "image_size": [128, 128, 128],
+          "mask_size_range": [33, 34],
+          "target_coord": [[237, 180, 52]]
+          // [[260,215,44],[238,191,44],[220,191,55],[282,154,55],[175,160,55],[150,164,55],[229,160,55],[260,190,61],[263,161,61],[250,156,65],[300,158,65],[162,144,65]]
+        }
+      },
+      "dataloader": {
+        "args": {
+          "batch_size": 1,
+          "shuffle": true,
+          "num_workers": 0,
+          "pin_memory": true,
+          "drop_last": false
+        }
+      }
+    }
+  },
+  "path": {
+    "base_dir": "experiments",
+    "code": "code",
+    "tb_logger": "tb_logger",
+    "results": "results",
+    "checkpoint": "checkpoint",
+    "resume_state": "/data/cephfs-1/work/groups/frey/users/chtz10_c/aneurysm_inpainting/experiments/train_inpainting_3d_spade_260202_101916/checkpoint/36"
+    // whole image noise ver
+    //"resume_state": "/data/cephfs-1/work/groups/frey/users/chtz10_c/aneurysm_inpainting/experiments/train_inpainting_3d_spade_260202_204239/checkpoint/32"
+    // fail
+    // "resume_state": "/data/cephfs-1/work/groups/frey/users/chtz10_c/aneurysm_inpainting/experiments/train_inpainting_3d_spade_260203_144428/checkpoint/31" 
+    // pending
+    // "resume_state": "/data/cephfs-1/work/groups/frey/users/chtz10_c/aneurysm_inpainting/experiments/train_inpainting_3d_spade_260202_204239/checkpoint/30"
+  },
+  "train": {
+    "n_epoch": 300,
+    "n_iter": 1000000,
+    "batch_size": 1,
+    "log_iter": 100,
+    "val_epoch": 1,
+    "save_checkpoint_epoch": 1,
+    "tensorboard": true
+  },
+  "distributed": false,
+  "gpu_ids": [0],
+  "seed": 42
+}

@@ -101,7 +101,7 @@ class Network(BaseNetwork):
                     noise_hat = self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level_flat)
             y_0_hat = self.predict_start_from_noise(y_t, t=t, noise=noise_hat)
         if 1:
-            if vessel_seg is not None:
+            if 0: # vessel_seg is not None:
                 if self.use_spade and seg is not None:
                     noise_hat = self.denoise_fn(torch.cat([y_cond, y_t, vessel_seg], dim=1), t, seg)
                 else:
@@ -118,7 +118,7 @@ class Network(BaseNetwork):
 
         model_mean, posterior_log_variance = self.q_posterior(
             y_0_hat=y_0_hat, y_t=y_t, t=t)
-        return model_mean, posterior_log_variance
+        return model_mean, posterior_log_variance, y_0_hat
 
     def q_sample(self, y_0, sample_gammas, noise=None):
         noise = default(noise, lambda: torch.randn_like(y_0))
@@ -129,10 +129,10 @@ class Network(BaseNetwork):
 
     @torch.no_grad()
     def p_sample(self, y_t, t, clip_denoised=True, y_cond=None, seg=None, vessel_seg=None):
-        model_mean, model_log_variance = self.p_mean_variance(
+        model_mean, model_log_variance, y_0_hat = self.p_mean_variance(
             y_t=y_t, t=t, clip_denoised=clip_denoised, y_cond=y_cond, seg=seg, vessel_seg=vessel_seg)
         noise = torch.randn_like(y_t) if any(t>0) else torch.zeros_like(y_t)
-        return model_mean + noise * (0.5 * model_log_variance).exp()
+        return model_mean + noise * (0.5 * model_log_variance).exp(), y_0_hat
 
     @torch.no_grad()
     def restoration(self, y_cond, y_t=None, y_0=None, mask=None, seg=None, vessel_seg=None, sample_num=8):
@@ -146,42 +146,32 @@ class Network(BaseNetwork):
 
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
             t = torch.full((b,), i, device=y_cond.device, dtype=torch.long)
-            #if i == 500:
-            #  affine = np.eye(4)  # ��²�檺 affine�]���t�u��Ŷ���T�^
-            #  nii = nib.Nifti1Image(y_cond[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
-            #  nib.save(nii, "tmp/y_cond_500.nii.gz")
 
-            #  affine = np.eye(4)  # ��²�檺 affine�]���t�u��Ŷ���T�^
-            #  nii = nib.Nifti1Image(y_t[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
-            #  nib.save(nii, "tmp/y_t_500.nii.gz")
-            #  print(y_cond.max(), y_cond.min())
-            #  print(y_t.max(), y_t.min())
-              
-            #if i == 2:
-            #  affine = np.eye(4)  # ��²�檺 affine�]���t�u��Ŷ���T�^
-            #  nii = nib.Nifti1Image(y_cond[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
-            #  nib.save(nii, "tmp/y_cond_10.nii.gz")
-
-            #  affine = np.eye(4)  # ��²�檺 affine�]���t�u��Ŷ���T�^
-            #  nii = nib.Nifti1Image(y_t[0, 0, ::].permute(1, 0, 2).detach().cpu().numpy(), affine)
-            #  nib.save(nii, "tmp/y_t_10.nii.gz")
-            #  print(y_cond.max(), y_cond.min())
-            #  print(y_t.max(), y_t.min())
-            y_t = self.p_sample(y_t, t, y_cond=y_cond, seg=seg, vessel_seg=vessel_seg)
-            # !!!!!!!!!�̭�����k!!!!!!!!!!!
-            if 1:
-                if mask is not None:
-                    y_t = y_0*(1.-mask) + mask*y_t
-            # �����O�o��^��
             if 0:
                 if mask is not None:
                     gamma_t = extract(self.gammas, t, y_0.shape).to(y_0.device)
                     noise = torch.randn_like(y_0)
                     y_known_t = gamma_t.sqrt() * y_0 + (1 - gamma_t).sqrt() * noise
                     y_t = y_known_t * (1. - mask) + y_t * mask
-                     
+                    
+            if 1:
+                if mask is not None:
+                    y_t = y_0*(1.-mask) + mask*y_t
+                    
+            y_t, y_0_hat = self.p_sample(y_t, t, y_cond=y_cond, seg=seg, vessel_seg=vessel_seg)
+            # y_0_hat is a predict y_0 start
+
+            
+            
+            if 1:
+                if mask is not None:
+                    y_t = y_0*(1.-mask) + mask*y_t
             if i % sample_inter == 0:
                 ret_arr = torch.cat([ret_arr, y_t], dim=0)
+            
+
+
+
         return y_t, ret_arr
 
     def forward(self, y_0, y_cond=None, mask=None, seg=None, vessel_seg=None, noise=None):
@@ -243,7 +233,24 @@ class Network(BaseNetwork):
                         noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), t, seg)
                     else:
                         noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), t)
-                loss = self.loss_fn(mask*noise, mask*noise_hat)
+                L_inpaint = self.loss_fn(mask*noise, mask*noise_hat)
+                # 0209
+                # y_0_hat = self.predict_start_from_noise(y_t=y_noisy*mask + (1.-mask)*y_0, t=t, noise=noise_hat)
+                # L_bg = torch.mean(torch.abs((1. - mask) * (y_0_hat - y_0)))
+                # lam_bg = 0.05
+                loss = L_inpaint# + lam_bg * L_bg
+            if 0:
+                if vessel_seg is not None:
+                    if self.use_spade and seg is not None:
+                        noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy, vessel_seg], dim=1), t, seg)
+                    else:
+                        noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy, vessel_seg], dim=1), t)
+                else:
+                    if self.use_spade and seg is not None:
+                        noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t, seg)
+                    else:
+                        noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), t)
+                loss = self.loss_fn(noise*mask, mask*noise_hat)
             if 0:
                 if vessel_seg is not None:
                     if self.use_spade and seg is not None:

@@ -104,6 +104,7 @@ class VisualWriter():
         result_path = os.path.join(self.result_dir, self.phase)
         os.makedirs(result_path, exist_ok=True)
         result_path = os.path.join(result_path, str(self.epoch))
+        print(result_path)
         os.makedirs(result_path, exist_ok=True)
 
         ''' get names and corresponding images from results[OrderedDict] '''
@@ -133,7 +134,15 @@ class VisualWriter():
                         volume_np = volume_np.transpose(2, 1, 0)  # (Z, Y, X) -> (X, Y, Z)
                         
                         # Create NIfTI image
-                        nii_img = nib.Nifti1Image(volume_np, affine=np.eye(4))
+                        spacing = (0.5, 0.5, 0.5) 
+                        affine = np.diag([
+                            spacing[0],
+                            spacing[1],
+                            spacing[2],
+                            1.0
+                        ])
+
+                        nii_img = nib.Nifti1Image(volume_np, affine=affine)
                         # Save with .nii.gz extension if not already present
                         save_name = name
                         if not save_name.endswith('.nii.gz') and not save_name.endswith('.nii'):
@@ -147,13 +156,19 @@ class VisualWriter():
                         if output.shape[1] > 1 and output.shape[2] > 10:
                             # Likely 3D: (C, D, H, W) or (1, D, H, W)
                             volume = output[0] if output.shape[0] > 1 else output.squeeze(0)  # (D, H, W)
-                            
+                            spacing = (0.5, 0.5, 0.5)
+                            affine = np.diag([
+                                spacing[0],
+                                spacing[1],
+                                spacing[2],
+                                1.0
+                            ])
                             # Convert to numpy and permute back to (X, Y, Z)
                             volume_np = volume.detach().cpu().numpy()
                             volume_np = volume_np.transpose(2, 1, 0)  # (Z, Y, X) -> (X, Y, Z)
-                            
+
                             # Create NIfTI image
-                            nii_img = nib.Nifti1Image(volume_np, affine=np.eye(4))
+                            nii_img = nib.Nifti1Image(volume_np, affine=affine)
                             save_name = name
                             if not save_name.endswith('.nii.gz') and not save_name.endswith('.nii'):
                                 save_name = save_name + '.nii.gz'
@@ -169,6 +184,7 @@ class VisualWriter():
                 processed_outputs = Util.postprocess(processed_outputs)
                 for i in range(len(processed_names)): 
                     Image.fromarray(processed_outputs[i]).save(os.path.join(result_path, processed_names[i]))
+
         except Exception as e:
             raise NotImplementedError(f'Error saving results: {str(e)}. You must specify the context of name and result in save_current_results functions of model.')
 
