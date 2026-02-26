@@ -97,7 +97,7 @@ $$\mathcal{L} = \mathbb{E}_{x_0, \epsilon, t} \left[ \left\| m \odot \left( \eps
 
 ## Datasets and Preprocessing
 
-- **Training**: 1,223 multi-center CTA volumes from [LargeIA](https://doi.org/10.1038/s41597-023-02430-4) and [RSNA Intracranial Aneurysm Detection](https://www.rsna.org/rsnai/ai-image-challenge/rsna-intracranial-aneurysm-detection-challenge-2023) datasets.
+- **Training**: 1,223 multi-center CTA volumes from [LargeIA](https://zenodo.org/records/6801398) and [RSNA Intracranial Aneurysm Detection](https://www.rsna.org/artificial-intelligence/ai-image-challenge/intracranial-aneurysm-detection-ai-challenge) datasets.
 - **Evaluation**: Two independent external test cohorts (External A and External B), not used during training.
 
 **Preprocessing pipeline** (applied uniformly to all datasets):
