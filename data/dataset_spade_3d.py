@@ -2392,8 +2392,8 @@ class TestInpaint3DSPADEDatasetRandomMaskWithVessel2(data.Dataset):
             ).astype(np.float32)
     
             # vessel + aneurysm union
-            #if vessel_mask_data is not None:
-            #    vessel_mask_data = np.maximum(vessel_mask_data, transplanted_aneurysm_mask)
+            if vessel_mask_data is not None:
+               vessel_mask_data = np.maximum(vessel_mask_data, transplanted_aneurysm_mask)
     
         # =====================================================
         # 2. final segmentation mask for SPADE (FULL volume)
@@ -2479,7 +2479,7 @@ class TestInpaint3DSPADEDatasetRandomMaskWithVessel2(data.Dataset):
             assert vessel_mask_data.shape == image_norm_crop.shape
     
         # =====================================================
-        # 6. numpy ¡÷ torch
+        # 6. numpy ï¿½ï¿½ torch
         # =====================================================
         def to_tensor(x):
             t = torch.from_numpy(x).float()

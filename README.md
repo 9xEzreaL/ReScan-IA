@@ -1,168 +1,200 @@
-# Palette: Image-to-Image Diffusion Models
+# ReScan-IA: A Spatially-Adaptive Diffusion Framework for Controllable 3D Intracranial Aneurysm Inpainting
 
-[Paper](https://arxiv.org/pdf/2111.05826.pdf ) |  [Project](https://iterative-refinement.github.io/palette/ )
+> **MICCAI 2026 Submission** — Anonymized
 
-## Brief
+---
 
-This is an unofficial implementation of **Palette: Image-to-Image Diffusion Models** by **Pytorch**, and it is mainly inherited from its super-resolution version [Image-Super-Resolution-via-Iterative-Refinement](https://github.com/Janspiry/Image-Super-Resolution-via-Iterative-Refinement). The code template is from my another seed project: [distributed-pytorch-template](https://github.com/Janspiry/distributed-pytorch-template).
+## Overview
 
-There are some implementation details with paper descriptions:
+**ReScan-IA** is a spatially-adaptive 3D diffusion framework for controllable intracranial aneurysm (IA) synthesis in CTA volumes. We frame aneurysm insertion as a *virtual re-scan*: a clinically plausible aneurysm is introduced into an existing CTA volume as if it had been captured in a repeat acquisition, while preserving surrounding vascular anatomy.
 
-- We adapted the U-Net architecture used in  `Guided-Diffusion`, which give a substantial boost to sample quality.
-- We used the attention mechanism in low-resolution features (16×16) like vanilla `DDPM`.
-- We encode the $\gamma$ rather than $t$ in `Palette` and embed it with affine transformation.
-- We fix the variance $Σ_\theta(x_t, t)$ to a constant during the inference as described in `Palette`.
+The framework addresses two core challenges in IA data augmentation:
+1. **Spatial controllability** — precise control over aneurysm location and morphology via decoder-level spatial modulation (3D SPADE).
+2. **Anatomical consistency** — vessel-aware conditioning to enforce vascular continuity during inpainting.
 
-## Status
+<img src="images/overview.jpg" width="800" alt="ReScan-IA Framework Overview"/>
 
-### Code
-- [x] Diffusion Model Pipeline
-- [x] Train/Test Process
-- [x] Save/Load Training State
-- [x] Logger/Tensorboard
-- [x] Multiple GPU Training (DDP)
-- [x] EMA
-- [x] Metrics (now for FID, IS)
-- [x] Dataset (now for inpainting, uncropping, colorization)
-- [x] Google colab script 🌟(now for inpainting)
+**(a)** Training procedure with vessel-aware and spatial conditioning. **(b)** Spatially-adaptive feature modulation mechanism. **(c)** Downstream synthetic data generation and mask sampling strategy during inference.
 
-### Task
+---
 
-I try to finish following tasks in order:
-- [x] Inpainting on [CelebaHQ](https://drive.google.com/drive/folders/1CjZAajyf-jIknskoTQ4CGvVkAigkhNWA?usp=sharing)🚀 ([Google Colab](https://colab.research.google.com/drive/1wfcd6QKkN2AqZDGFKZLyGKAoI5xcXUgO#scrollTo=8VFpuekybeQK))
-- [x] Inpainting on [Places2 with 128×128 centering mask](https://drive.google.com/drive/folders/1fLyFtrStfEtyrqwI0N_Xb_3idsf0gz0M?usp=sharing)🚀
+## Key Results
 
-The follow-up experiment is uncertain, due to lack of time and GPU resources:
+### Quantitative Performance — External Dataset A & B
 
-- [ ] Uncropping on Places2
-- [ ] Colorization on ImageNet val set 
+Segmentation (Dice) and detection (FP/case, Precision, Recall) on two independent external cohorts. Case-wise Dice reported with 95% CI. Best results per dataset in **bold**.
 
-## Results
+**External Dataset A**
 
-The DDPM model requires significant computational resources, and we have only built a few example models to validate the ideas in this paper.
+| Method | Voxel Dice (%) | Case Dice (%) [95% CI] | FP / Case [95% CI] | Precision (%) [95% CI] | Recall (%) [95% CI] |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Real-10 | 35.90 | 10.24 [4.10–16.38] | 1.93 [1.42–2.44] | 9.26 [3.36–15.16] | 30.00 [16.26–43.74] |
+| Synthetic-250 | 42.83 | 21.95 [15.45–28.45] | 11.71 [10.50–12.92] | 5.39 [4.12–6.67] | **88.89** [79.34–98.44] |
+| Real-250 | 41.11 | 11.17 [4.82–17.51] | 5.07 [4.49–5.66] | 3.81 [1.73–5.88] | 30.00 [16.26–43.74] |
+| **Real+Synthetic (250+250)** | **62.24** | **24.65** [16.27–33.03] | **1.83** [1.49–2.16] | **19.02** [12.22–25.82] | 58.89 [44.11–73.67] |
 
-### Visuals
+**External Dataset B**
 
-#### Celeba-HQ
+| Method | Voxel Dice (%) | Case Dice (%) [95% CI] | FP / Case [95% CI] | Precision (%) [95% CI] | Recall (%) [95% CI] |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Real-10 | 19.46 | 9.88 [4.39–15.37] | **1.72** [1.15–2.28] | 12.81 [5.35–20.28] | 27.78 [14.36–41.20] |
+| **Synthetic-250** | **35.20** | **18.80** [13.12–24.49] | 12.16 [11.30–13.03] | 5.15 [3.93–6.36] | **87.04** [77.32–96.76] |
+| Real-250 | 28.58 | 12.00 [6.47–17.53] | 5.28 [4.67–5.90] | 4.85 [2.61–7.08] | 38.89 [24.61–53.17] |
+| Real+Synthetic (250+250) | 28.06 | 16.57 [9.48–23.67] | 1.82 [1.51–2.14] | **18.08** [11.17–24.98] | 51.11 [36.26–65.96] |
 
-Results with 200 epochs and 930K iterations, and the first 100 samples in [centering mask](https://drive.google.com/drive/folders/10zyHZtYV5vCht2MGNCF8WzpZJT2ae2RS?usp=sharing) and [irregular mask](https://drive.google.com/drive/folders/1vmSI-R9J2yQZY1cVkSSZlTYil2DprzvY?usp=sharing). 
+### Qualitative Ablation — Image Generation Quality
 
-| ![Process_02323](misc//image//Process_02323.jpg) |    ![Process_02323](misc//image//Process_26190.jpg)  |
-| ------------------------------------------------ | ---- |
+<img src="images/ablation.jpg" width="800" alt="Qualitative Ablation"/>
 
-#### Places2 with 128×128 centering mask
+*From left to right: real CTA, aneurysm mask, Palette baseline, ReScan-IA w/o spatial modulation, and full ReScan-IA. Palette fails to preserve vascular continuity; removing spatial modulation leads to poor morphological control. ReScan-IA achieves anatomically consistent and controllable synthesis.*
 
-Results with 16 epochs and 660K iterations, and the several **picked** samples in [centering mask](https://drive.google.com/drive/folders/1XusKO0_M6GUfPG-FOlID0Xcp0SiexKNe?usp=sharing).
+### Qualitative Ablation — Downstream Segmentation
 
-| ![Mask_Places365_test_00209019.jpg](misc//image//Mask_Places365_test_00209019.jpg) | ![Mask_Places365_test_00143399.jpg](misc//image//Mask_Places365_test_00143399.jpg) | ![Mask_Places365_test_00263905.jpg](misc//image//Mask_Places365_test_00263905.jpg) |  ![Mask_Places365_test_00144085.jpg](misc//image//Mask_Places365_test_00144085.jpg)    |
-| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ---- |
-| ![Out_Places365_test_00209019](misc//image//Out_Places365_test_00209019.jpg) | ![Out_Places365_test_00143399.jpg](misc//image//Out_Places365_test_00143399.jpg) | ![Out_Places365_test_00263905.jpg](misc//image//Out_Places365_test_00263905.jpg) | ![Out_Places365_test_00144085.jpg](misc//image//Out_Places365_test_00144085.jpg)    |
+<img src="images/ablation_seg.jpg" width="800" alt="Downstream Segmentation Comparison"/>
 
-#### Uncropping on Places2
+*Synthetic-only training increases sensitivity but yields more false positives; real+synthetic training improves boundary accuracy and suppresses spurious detections.*
 
-Results with 8 epochs and 330K iterations, and the several  **picked** samples in [uncropping](https://drive.google.com/drive/folders/1tC3B8ayaadhXAJrOCTrw15R8t84REPWJ?usp=sharing).
-| ![Process_Places365_test_00309553](misc//image//Process_Places365_test_00309553.jpg) |    ![Process_Places365_test_00042384](misc//image//Process_Places365_test_00042384.jpg)  |
-| ------------------------------------------------ | ---- |
+---
 
+## Method
 
-### Metrics
+### Problem Formulation
 
-| Tasks        | Dataset | EMA | FID(-) | IS(+) |
-| -------------------- | ----------- | -------- | ---- | -------------------- |
-| Inpainting with centering mask | Celeba-HQ | False | 5.7873 | 3.0705 |
-| Inpainting with irregular mask | Celeba-HQ | False | 5.4026 | 3.1221 |
+Given a 3D CTA volume $x_0$, an inpainting mask $m$, a binary vessel mask $v$, and a spatial control mask $s$ specifying the target aneurysm location, ReScan-IA learns:
+
+$$p_\theta(\hat{x} \mid x_0, m, v, s)$$
+
+Context outside the mask is preserved via:
+
+$$\hat{x} = (1-m) \odot x_0 + m \odot \tilde{x}$$
+
+### Dual-Conditional Diffusion Architecture
+
+At each denoising step, the 3D U-Net receives:
+
+$$C_{\text{in}} = \text{concat}(x_t \odot m + x_0 \odot (1-m),\ x_{\text{bg}},\ v)$$
+
+- **Input-level conditioning**: masked noisy input + background context $x_{\text{bg}} = (1-m) \odot x_0$ + vessel mask $v$
+- **Feature-level conditioning**: 3D spatially-adaptive modulation in the decoder (see below)
+
+### 3D Spatially-Adaptive Feature Modulation
+
+Inspired by SPADE, we extend spatial modulation to volumetric feature maps. For a decoder feature map $h$ and spatial control mask $s$:
+
+$$A = \text{ReLU}(\text{Conv}_{3\times3}(s))$$
+$$\gamma(s) = \text{Conv}_\gamma(A), \quad \beta(s) = \text{Conv}_\beta(A)$$
+$$h' = h \odot (1 + \gamma(s)) + \beta(s)$$
+
+Spatial modulation is applied **exclusively in the decoder**, forming an asymmetric design: the encoder extracts stable anatomical representations, while the decoder integrates pathological structures guided by $s$.
+
+### Training Objective
+
+Spatially masked $\ell_1$ denoising loss, restricted to the inpainting region:
+
+$$\mathcal{L} = \mathbb{E}_{x_0, \epsilon, t} \left[ \left\| m \odot \left( \epsilon - \epsilon_\theta(C_{\text{in}}, t, s) \right) \right\|_1 \right]$$
+
+---
+
+## Datasets and Preprocessing
+
+- **Training**: 1,223 multi-center CTA volumes from [LargeIA](https://doi.org/10.1038/s41597-023-02430-4) and [RSNA Intracranial Aneurysm Detection](https://www.rsna.org/rsnai/ai-image-challenge/rsna-intracranial-aneurysm-detection-challenge-2023) datasets.
+- **Evaluation**: Two independent external test cohorts (External A and External B), not used during training.
+
+**Preprocessing pipeline** (applied uniformly to all datasets):
+1. Resample to isotropic 0.5 mm spacing
+2. Skull-stripping with [SynthStrip](https://surfer.nmr.mgh.harvard.edu/docs/synthstrip/)
+3. HU clipping to [−50, 450]
+4. Linear normalization to [−1, 1]
+
+---
 
 ## Usage
+
 ### Environment
-```python
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Pre-trained Model
+### Data Preparation
 
-| Dataset   | Task       | Iterations | GPUs×Days×Bs | URL                                                          |
-| --------- | ---------- | ---------- | ------------ | ------------------------------------------------------------ |
-| Celeba-HQ | Inpainting | 930K       | 2×5×3        | [Google Drive](https://drive.google.com/drive/folders/13YZ2UAmGJ-b7DICr-FDAPM7gctreJEoH?usp=sharing) |
-| Places2   | Inpainting | 660K       | 4×8×10       | [Google Drive](https://drive.google.com/drive/folders/1Vz_HC0LcpV6yMLOd-SXyoaqJHtxyPBxZ?usp=sharing) |
+Prepare your CTA volumes with the following structure. Each subject requires:
+- A CTA volume (NIfTI format)
+- A binary vessel mask (Circle of Willis segmentation)
+- An aneurysm mask (ground truth for training; user-defined for inference)
 
-**Bs** indicates sample size per gpu.
+Modify the dataset configuration in the config file to point to your data:
 
-
-
-### Data Prepare
-
-We get most of them from Kaggle, which may be slightly different from official  version, and you also can download them from official website.
-- [CelebA-HQ resized (256x256) Kaggle](https://www.kaggle.com/datasets/badasstechie/celebahq-resized-256x256)
-- [Places2 Official](http://places2.csail.mit.edu/download.html) | [Places2 Kaggle](https://www.kaggle.com/datasets/nickj26/places2-mit-dataset?resource=download)
-- [ImageNet Official](https://www.image-net.org/download.php)
-
-We use the default division of these datasets for training and evaluation. The file lists we use can be found in [Celeba-HQ](https://drive.google.com/drive/folders/1-ym2Mi2jVKdWmWYKJ_L2TWXjUQh8z7H-?usp=sharing), [Places2](https://drive.google.com/drive/folders/11Qj2MtRfiD7LbKEveYwOLaiX62lm_2ww?usp=sharing).
-
-After you prepared own data, you need to modify the corresponding configure file to point to your data. Take the following as an example:
-
-```yaml
-"which_dataset": {  // import designated dataset using arguments 
-    "name": ["data.dataset", "InpaintDataset"], // import Dataset() class
-    "args":{ // arguments to initialize dataset
-    	"data_root": "your data path",
-    	"data_len": -1,
-    	"mask_mode": "hybrid"
-    } 
-},
+```json
+"which_dataset": {
+    "name": ["data.dataset_spade_3d", "InpaintDataset3DSPADE"],
+    "args": {
+        "data_root": "your/data/path",
+        "data_len": -1
+    }
+}
 ```
 
-More choices about **dataloader** and **validation split** also can be found in `datasets`  part of configure file.
+### Training
 
-### Training/Resume Training
-1. Download the checkpoints from given links.
-1. Set `resume_state` of configure file to the directory of previous checkpoint. Take the following as an example, this directory contains training states and saved model:
-
-```yaml
-"path": { //set every part file path
-	"resume_state": "experiments/inpainting_celebahq_220426_150122/checkpoint/100" 
-},
-```
-2. Set your network label in `load_everything` function of `model.py`, default is **Network**. Follow the tutorial settings, the optimizers and models will be loaded from 100.state and 100_Network.pth respectively.
-
-```python
-netG_label = self.netG.__class__.__name__
-self.load_network(network=self.netG, network_label=netG_label, strict=False)
+```bash
+python run.py -p train -c config/SPADE/inpainting_3d_spade.json
 ```
 
-3. Run the script:
+**Training details**: 100,000 iterations, Adam optimizer (lr = 5×10⁻⁵), T = 1000 timesteps, linear noise schedule, 96×96×96 patch size, batch size 1.
 
-```python
-python run.py -p train -c config/inpainting_celebahq.json
+### Inference / Synthetic Data Generation
+
+```bash
+python run.py -p test -c config/SPADE/inpainting_3d_spade.json
 ```
 
-We test the U-Net backbone used in `SR3` and `Guided Diffusion`,  and `Guided Diffusion` one have a more robust performance in our current experiments.  More choices about **backbone**, **loss** and **metric** can be found in `which_networks`  part of configure file.
-
-### Test
-
-1. Modify the configure file to point to your data following the steps in **Data Prepare** part.
-2. Set your model path following the steps in **Resume Training** part.
-3. Run the script:
-```python
-python run.py -p test -c config/inpainting_celebahq.json
-```
+Inference uses 128×128×128 patches to provide increased spatial context. During inference, the spatial control mask $s$ serves as a user-defined signal to specify aneurysm location and morphology.
 
 ### Evaluation
-1. Create two folders saving ground truth images and sample images, and their file names need to correspond to each other.
 
-2. Run the script:
-
-```python
-python eval.py -s [ground image path] -d [sample image path]
+```bash
+python eval.py -s [ground_truth_path] -d [generated_samples_path]
 ```
 
+---
 
+## Repository Structure
 
-## Acknowledge
-Our work is based on the following theoretical works:
-- [Denoising Diffusion Probabilistic Models](https://arxiv.org/pdf/2006.11239.pdf)
-- [Palette: Image-to-Image Diffusion Models](https://arxiv.org/pdf/2111.05826.pdf)
-- [Diffusion Models Beat GANs on Image Synthesis](https://arxiv.org/abs/2105.05233)
+```
+├── config/
+│   └── SPADE/                  # ReScan-IA configuration files
+├── data/
+│   └── dataset_spade_3d.py     # 3D CTA dataset with dual conditioning
+├── models/
+│   ├── model.py                # Diffusion model training/inference loop
+│   └── network.py              # 3D U-Net with spatially-adaptive modulation
+├── core/                       # Diffusion utilities (scheduler, logger, etc.)
+├── preprocess/                 # CTA preprocessing scripts
+├── run.py                      # Main entry point
+└── eval.py                     # Evaluation metrics
+```
 
-and we are benefiting a lot from the following projects:
+---
+
+## Acknowledgements
+
+This codebase is built upon the [Palette: Image-to-Image Diffusion Models](https://arxiv.org/pdf/2111.05826.pdf) implementation by [Janspiry](https://github.com/Janspiry/Palette-Image-to-Image-Diffusion-Models), extended substantially for 3D volumetric medical image synthesis with dual conditioning and spatially-adaptive feature modulation.
+
+Our work builds on the following:
+
+**Theoretical foundations:**
+- [Denoising Diffusion Probabilistic Models (Ho et al., NeurIPS 2020)](https://arxiv.org/pdf/2006.11239.pdf)
+- [Palette: Image-to-Image Diffusion Models (Saharia et al., SIGGRAPH 2022)](https://arxiv.org/pdf/2111.05826.pdf)
+- [Diffusion Models Beat GANs on Image Synthesis (Dhariwal & Nichol, NeurIPS 2021)](https://arxiv.org/abs/2105.05233)
+- [Semantic Image Synthesis with Spatially-Adaptive Normalization / SPADE (Park et al., CVPR 2019)](https://arxiv.org/abs/1903.07291)
+
+**Code references:**
 - [openai/guided-diffusion](https://github.com/openai/guided-diffusion)
-- [LouisRouss/Diffusion-Based-Model-for-Colorization](https://github.com/LouisRouss/Diffusion-Based-Model-for-Colorization)
+- [Janspiry/Palette-Image-to-Image-Diffusion-Models](https://github.com/Janspiry/Palette-Image-to-Image-Diffusion-Models)
+
+---
+
+## License
+
+This project is released under the [MIT License](LICENSE).
