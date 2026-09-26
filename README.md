@@ -1,6 +1,6 @@
 # ReScan-IA: A Spatially-Adaptive Diffusion Framework for Controllable 3D Intracranial Aneurysm Inpainting
 
-> **MICCAI 2026 Submission** — Anonymized
+> **MICCAI 2026 Accepted**
 
 ---
 
